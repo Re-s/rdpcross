@@ -13,42 +13,40 @@ permissions:
 
 jobs:
   build-appimage:
-    name: Build AppImage (${{ matrix.arch }})
+    name: Build AppImage (x86_64)
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x86_64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Debug apt names
         run: |
-          curl -s https://raw.githubusercontent.com/Re-s/rdpcross/main/.github/workflows/build.yml > /tmp/b.yml
-          echo "=== apt list freerdp ==="
+          echo "=== freerdp dev packages ==="
           sudo apt-cache search 'freerdp.*dev' | head -8
-          echo "=== apt list qt6 ==="
-          sudo apt-cache search 'qt6.*-dev' | head -8
-          echo "=== freerdp3 check ==="
+          echo "=== qt6 dev packages ==="
+          sudo apt-cache search '^qt6.*dev' | head -8
+          echo "=== freerdp3 ==="
           which xfreerdp3 freerdp3 xfreerdp 2>&1 | head -5
+          echo "=== display libs ==="
+          sudo apt-cache search 'headless' | grep -iE 'xvfb|^xvfb' | head -5
 
       - name: Setup Ubuntu
         run: |
           sudo apt-get update
+          FQP=$(sudo apt-cache search 'freerdp2-dev' | awk '{print $1}' | head -2)
+          echo "freerdp dev: '${FQP:-none}'"
+          [[ -z "$FQP" ]] && FQP="freerdp2-dev"
           sudo apt-get install -y --no-install-recommends build-essential cmake \
             ninja-build pkg-config patchelf python3 wget curl \
-            qt6-base-dev libfreerdp3-dev \
-            libasound2-dev libpulse-dev
+            qt6-base-dev "$FQP" \
+            libasound2-dev libpulse-dev libx11-dev
 
-      - name: Build binary (ninja -j1, QEMU/ARM only 1 core)
+      - name: Build binary
         run: |
-          CMAKE_CPU="$(nproc)"
-          if [ "${{ matrix.arch }}" = "arm64" ]; then CMAKE_CPU=1; fi
-          echo "CPU: $CMAKE_CPU"
+          echo "CPU: $(nproc)"
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-          ninja -C build -j"CMAKE_CPU"
+          ninja -C build -j1
 
       - name: Package AppImage
         run: |
