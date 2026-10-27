@@ -34,12 +34,13 @@ jobs:
       - name: Setup Ubuntu
         run: |
           sudo apt-get update
-          FQP=$(sudo apt-cache search 'freerdp2-dev' | awk '{print $1}' | head -2)
-          echo "freerdp dev: '${FQP:-none}'"
-          [[ -z "$FQP" ]] && FQP="freerdp2-dev"
-          sudo apt-get install -y --no-install-recommends build-essential cmake \
-            ninja-build pkg-config patchelf python3 wget curl \
-            qt6-base-dev "$FQP" \
+          FQP=""
+          for p in freerdp2-dev libfreerdp3-dev freerdp3-dev; do
+            if sudo apt-get install -y --no-install-recommends "$p" >/dev/null 2>&1; then FQP="$p"; break; fi
+          done
+          echo "freerdp: '${FQP:-none}'"
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build \
+            pkg-config patchelf python3 wget curl qt6-base-dev "$FQP" \
             libasound2-dev libpulse-dev libx11-dev
 
       - name: Build binary
