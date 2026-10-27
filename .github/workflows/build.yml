@@ -13,29 +13,29 @@ permissions:
 
 jobs:
   build-appimage:
-    name: Build AppImage (x86_64)
+    name: Build AppImage
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug apt names
-        run: |
-          echo "=== freerdp dev packages ==="
-          sudo apt-cache search 'freerdp.*dev' | head -8
-          echo "=== qt6 dev packages ==="
-          sudo apt-cache search '^qt6.*dev' | head -8
-          echo "=== freerdp3 ==="
-          which xfreerdp3 freerdp3 xfreerdp 2>&1 | head -5
-          echo "=== display libs ==="
-          sudo apt-cache search 'headless' | grep -iE 'xvfb|^xvfb' | head -5
+      # 缓存层 1：apt 包列表 + 已下载 deb，避免重复 apt-get update（Qt6 + FreeRDP）
+      - name: Cache apt lists & archives
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/lib/apt/lists/*
+            /var/cache/apt/archives/*
+          key: apt-${{ runner.os }}-${{ hashFiles('.github/workflows/build.yml') }}
+          restore-keys: |
+            apt-${{ runner.os }}-
 
-      - name: Setup Ubuntu
+      - name: Setup Ubuntu (pkg install with fallback)
         run: |
           sudo apt-get update
           FQP=""
-          for p in freerdp2-dev libfreerdp3-dev freerdp3-dev; do
+          for p in libfreerdp3-dev freerdp3-dev freerdp2-dev; do
             if sudo apt-get install -y --no-install-recommends "$p" >/dev/null 2>&1; then FQP="$p"; break; fi
           done
           echo "freerdp: '${FQP:-none}'"
@@ -43,11 +43,32 @@ jobs:
             pkg-config patchelf python3 wget curl qt6-base-dev "$FQP" \
             libasound2-dev libpulse-dev libx11-dev
 
+      # 缓存层 2：cmake 输出树，避免重复源码级编译
+      - name: Cache build dir
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: cmake-build-${{ github.sha }}
+          restore-keys: |
+            cmake-build-${{ github.sha }}
+
       - name: Build binary
         run: |
           echo "CPU: $(nproc)"
           cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           ninja -C build -j1
+
+      # 缓存层 3：appimagetool 下载 + quick-sharun 依赖包（/tmp/sharun+*.tar）
+      - name: Cache AppImage toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            appimage/appimagetool
+            /tmp/sharun+helper-libs-x86_64.tar
+            /tmp/cross-libc-dlopen-x86_64.tar
+          key: appimagetool-${{ runner.os }}-${{ hashFiles('appimage/appimagetool', 'appimage/quick-sharun.sh') }}
+          restore-keys: |
+            appimagetool-${{ runner.os }}-
 
       - name: Package AppImage
         run: |
@@ -61,19 +82,22 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rdpcross-${{ matrix.arch }}-appimage
+          name: rdpcross-appimage
           path: dist/*.AppImage
+          retention-days: 7
 
-  # 2. x86_64: 创建 Release + 上传
+  # 创建 Release（仅发版时运行）
   release:
     name: Create Release
     runs-on: ubuntu-latest
     needs: build-appimage
-    if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
+    if: >-
+      ${{ github.event_name == 'release' && github.event.action == 'published' }}
     steps:
-      - name: Download artifacts
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
+          name: rdpcross-appimage
           path: artifacts
 
       - name: Create Release
@@ -81,6 +105,6 @@ jobs:
           version=$(grep kAppVersion src/constants.h | sed 's/.*"\(.*\)".*/\1/')
           echo "version=$version"
           gh release create "v$version" --target main --title "RDPCross v$version" \
-            $(ls artifacts/*/rdpcross-*.AppImage | tr '\n' ' ')
+            $(ls artifacts/*.AppImage | tr '\n' ' ')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
