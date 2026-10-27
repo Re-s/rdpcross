@@ -2,141 +2,80 @@ name: Build & Release
 
 on:
   push:
-    branches: [main, master]
-    tags: ["v*"]
+    branches: [main]
   pull_request:
-    branches: [main, master]
+    branches: [main]
+  release:
+    types: [published]
 
-env:
-  FREEZED: "1"
-  CM: "1"
-  APPNAME: "RDPCross"
-  DESKTOP: "rdpcross.desktop"
+permissions:
+  contents: write
 
 jobs:
-  build:
-    name: Build (${{ matrix.arch }})
+  build-appimage:
+    name: Build AppImage (${{ matrix.arch }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - arch: x86_64
-            cc: gcc
-            cxx: g++
-            QtArch: x11_x86_64
-          # https://docs.github.com/en/actions/using-github-hosted-runners/using-github-hosted-runners/about-github-hosted-runners#supported-runners
-          # 如果需要 arm64（Linux），请在 GitHub 上开启后取消本行注释
-          # - arch: aarch64
-          #   cc: gcc-aarch64-linux-gnu
-          #   cxx: g++-aarch64-linux-gnu
-          #   QtArch: android_arm64
-
+        arch: [x86_64, arm64]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install build deps
-        shell: bash
+      - name: Setup Ubuntu
         run: |
-          set -e
-          echo "deb http://mirrors.tencentyun.com/debian/ trixie main contrib non-free non-free-firmware" | sudo tee /etc/apt/sources.list
-          echo "deb http://mirrors.tencentyun.com/debian/ trixie-security main contrib non-free non-free-firmware" | sudo tee -a /etc/apt/sources.list
           sudo apt-get update
-          # freerdp3 库必须在 6.12 以上，当前 trixie 为 3.15
-          sudo apt-get install -y --no-install-recommends \
-            build-essential \
-            cmake \
-            ninja-build \
-            pkg-config \
-            patchelf \
-            python3 \
-            libqt6core6t64-dev \
-            libqt6widgets6t64-dev \
-            libqt6qml6 \
-            libqt6quick6 \
-            libqt6gui6t64-dev \
-            libqt6multimedia6 \
-            libfreerdp3-dev \
-            libasound2-dev \
-            libpulse-dev \
-            libx11-dev \
-            libxfixes-dev \
-            xvfb \
-            freerdp-shadow-cli3
+          sudo apt-get install -y --no-install-recommends build-essential cmake \
+            ninja-build pkg-config patchelf python3 wget curl \
+            libqt6core6t64-dev libqt6widgets6t64-dev libqt6gui6t64-dev \
+            libqt6sql6t64-dev qt6-base-dev freerdp3-dev \
+            libasound2-dev libpulse-dev
 
-      - name: Fix patchelf
+      - name: Build binary (ninja -j1, QEMU/ARM only 1 core)
         run: |
-          which patchelf || sudo apt install patchelf -y
-          echo "patchelf ready"
-
-      - name: Setup Ninja
-        run: |
-          which ninja || (sudo apt-get install -y ninja-build && echo ok)
-          ninja --version
-
-      - name: Build
-        shell: bash
-        run: |
-          set -e
-          export CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
-          mkdir -p build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release -GNinja .. 
-          ninja -j1 || ninja -j2
-          echo "Build OK"
+          CMAKE_CPU="$(nproc)"
+          if [ "${{ matrix.arch }}" = "arm64" ]; then CMAKE_CPU=1; fi
+          echo "CPU: $CMAKE_CPU"
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DQT6_MINIMAL=ON
+          ninja -C build -j"CMAKE_CPU"
 
       - name: Package AppImage
-        shell: bash
         run: |
-          set -e
-          sudo dpkg --add-architecture arm64 2>/dev/null || echo "ok"
-          cd ${{ github.workspace }}
-          chmod +x appimage/build-appimage.sh
+          cd appimage
+          chmod +x quick-sharun.sh
           export DWARFS_COMP="zstd:level=3"
-          bash appimage/build-appimage.sh 2>&1
-          ls -lh dist/*.AppImage
+          ./build-appimage.sh
+        env:
+          QT_QPA_PLATFORM: offscreen
 
-      - name: Renaming and artifacts
-        shell: bash
-        run: |
-          set -e
-          cd ${{ github.workspace }}/dist
-          dir=$([ -d dist ] && ls dist/*.AppImage || echo "dist")
-          echo "AppImage path: $dir"
-          if [ $# -gt 0 ]; then
-            echo "extra steps"
-          else
-            echo "no extra"
-          fi
-
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rdpcross-appimage-${{ matrix.arch }}
+          name: rdpcross-${{ matrix.arch }}-appimage
           path: dist/*.AppImage
-          retention-days: 90
 
-      - name: Check sha
-        run: |
-          echo "shasum: ${{ github.sha }}"
-
+  # 2. x86_64: 创建 Release + 上传
   release:
     name: Create Release
-    needs: build
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build-appimage
+    if: ${{ github.event_name == 'release' && github.event.action == 'published' }}
     steps:
-      - name: Download Artifact
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
-      - name: Create GitHub Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: artifacts
+
+      - name: Create Release
         run: |
-          set -e
-          ls dist/rdpcross-appimage-*/ 
-          ls dist/
-          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" 
-          gh release list
+          version=$(grep kAppVersion src/constants.h | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$version"
+          gh release create "v$version" --target main --title "RDPCross v$version" \
+            $(ls artifacts/*/rdpcross-*.AppImage | tr '\n' ' ')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
