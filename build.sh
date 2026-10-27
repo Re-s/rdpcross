@@ -36,6 +36,12 @@ if [ "$ARCH" = "arm64" ]; then
     fi
 fi
 
+# 切换架构时必须清理，避免 ABI 混用
+if [ -n "$(ls -A build 2>/dev/null)" ]; then
+    echo "-- 清理旧 build/ 目录（切换了架构）"
+    rm -rf build
+fi
+
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release $CMAKE
 ninja -C build -j1
 
