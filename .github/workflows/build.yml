@@ -29,8 +29,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends build-essential cmake \
             ninja-build pkg-config patchelf python3 wget curl \
-            libqt6core6t64-dev libqt6widgets6t64-dev libqt6gui6t64-dev \
-            libqt6sql6t64-dev qt6-base-dev freerdp3-dev \
+            qt6-base-dev libfreerdp3-dev \
             libasound2-dev libpulse-dev
 
       - name: Build binary (ninja -j1, QEMU/ARM only 1 core)
@@ -38,10 +37,7 @@ jobs:
           CMAKE_CPU="$(nproc)"
           if [ "${{ matrix.arch }}" = "arm64" ]; then CMAKE_CPU=1; fi
           echo "CPU: $CMAKE_CPU"
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF \
-            -DQT6_MINIMAL=ON
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           ninja -C build -j"CMAKE_CPU"
 
       - name: Package AppImage
