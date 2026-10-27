@@ -17,6 +17,7 @@ set(CMAKE_STRIP aarch64-linux-gnu-strip)
 
 # pkg-config: use the target environment's pkg-config
 set(ENV{PKG_CONFIG} aarch64-linux-gnu-pkgconfig)
+set(CMAKE_PREFIX_PATH /usr/lib/aarch64-linux-gnu/cmake)
 set(CMAKE_FIND_ROOT_PATH /usr/aarch64-linux-gnu /usr/lib/aarch64-linux-gnu /usr/include/aarch64-linux-gnu)
 
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
