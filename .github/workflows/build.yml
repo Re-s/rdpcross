@@ -12,6 +12,31 @@ permissions:
   contents: write
 
 jobs:
+  arm64-toolchain-check:
+    name: Check arm64 toolchain
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Ubuntu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+      - name: Check cmake toolchain file
+        working-directory: .  # root
+        run: |
+          echo "=== CMAKERUN ==="
+          cmake -B /tmp/build-arm64-check -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/Toolchain-arm64.cmake" 2>&1 | head -20
+          echo "=== AARCH64 compiler ==="
+          aarch64-linux-gnu-g++ --version | head -1
+
+      - name: Stop (no real build)
+        run: echo "arm64 cross build needs arm64 Qt6/FreerDP dev libs; see README"
+        working-directory: .
+
   build-appimage:
     name: Build AppImage
     runs-on: ubuntu-latest

@@ -32,6 +32,31 @@ cmake --build build -j1
 sudo ./install.sh              # 安装到 /usr/local
 ```
 
+## 构建（arm64 / 交叉编译）
+
+项目通过 `cmake/Toolchain-arm64.cmake` 支持 **arm64（AArch64）** 目标。
+
+```bash
+# arm64 主机：本地构建
+./build.sh --arch arm64
+```
+
+arm64 开发包（以 Debian/Ubuntu 为准）：
+
+```bash
+# Debian（arm64 源，ports 镜像）
+sudo apt install -y build-essential cmake ninja-build pkg-config patchelf \
+    libqt6core6t64-dev libqt6widgets6t64-dev libfreerdp3-dev qt6-base-dev \
+    libasound2-dev libpulse-dev libx11-dev
+```
+
+已知限制：
+
+- 交叉编译（在 x86_64 主机上）需要宿主机上的 arm64 Qt6/FreeRDP 开发库。
+- 官方 Debian/Ubuntu 源中的 Qt6 开发包通常只支持 amd64/i386；arm64 用户从 **ports** 源安装。
+
+> AppImage 目前仅在 x86_64 的 CI 中构建，arm64 请使用上面构建好的 `build/rdpcross` 自行运行或自行打 deb。
+
 ## 构建 AppImage（Anylinux 方案）
 
 ```bash
