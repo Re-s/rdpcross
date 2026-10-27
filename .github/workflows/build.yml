@@ -90,7 +90,7 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------
-  # 2. arm64（QEMU 模拟，容器内原生 gcc + arm64 开发库）
+  # 2. arm64（Docker QEMU，容器内原生 gcc + arm64 开发库，一次性构建）
   # ---------------------------------------------------------------
   build-arm64:
     name: Build (arm64)
@@ -100,36 +100,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build arm64 in Docker
-        id: arm64
-        run: |
-          set -x
-          # 1. 启动 arm64 容器（预装 binfmt 已在 runner 内）
-          docker create --name rdpcross-arm64 --platform linux/arm64 ubuntu:noble tail -f /dev/null
-          docker start rdpcross-arm64
+      - name: Setup QEMU (arm64)
+        uses: docker/setup-qemu-action@v3
 
-          # 2. 装依赖（QT6 + FreeRDP3 + 工具链）
-          docker exec rdpcross-arm64 sh -c '
-            apt-get update -q > /dev/null 2>&1 && echo "APT UPDATE OK"
+      - name: Build arm64 (Docker QEMU)
+        run: |
+          rm -rf build && mkdir -p build
+          docker run --rm --platform linux/arm64 --volume "$PWD:/app:rw" ubuntu:noble sh -c '
+            cd /app &&
+            apt-get update -q > /dev/null 2>&1 && echo "APT UPDATE OK" &&
             apt-get install -y --no-install-recommends \
               build-essential cmake ninja-build pkg-config \
               qt6-base-dev freerdp3-dev \
-              libasound2-dev libpulse-dev libx11-dev libgl-dev
-          '
+              libasound2-dev libpulse-dev libx11-dev libgl-dev > /dev/null 2>&1 &&
+            echo "DEPS READY" &&
+            rm -rf build && mkdir -p build &&
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release > /tmp/cmake.log 2>&1 &&
+            echo "CMAKE OK" &&
+            ninja -C build -j1 > /tmp/ninja.log 2>&1 &&
+            echo "NINJA OK" &&
+            ls -la build/rdpcross
+                  '
+        env:
+          QT_QPA_PLATFORM: offscreen
 
-          # 3. 挂载项目到容器，编译
-          docker run --rm --platform linux/arm64 --volume "$PWD:/proj" ubuntu:noble sh -c '
-            cd /proj && cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release 2>&1 | tail -6
-            ninja -C build -j1 2>&1 | tail -4
-          '
-          echo "===" 
-          echo "4. 产物位于容器 /proj/build/rdpcross"
-
-      - name: Test arm64 binary
-        if: steps.arm64.outcome == 'success'
-        run: |
-          readelf -h /proj/bin/rdpcross >/dev/null 2>&1 || ls -la /proj/build/rdpcross || :
-          echo "arm64 build"
+      - name: Upload arm64 binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: rdpcross-arm64
+          path: build/rdpcross
+          retention-days: 7
 
   # ---------------------------------------------------------------
   # 3. Release
