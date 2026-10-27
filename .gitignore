@@ -1,0 +1,27 @@
+# 构建产物
+build/
+dist/
+AppDir/
+*.AppImage
+*.a
+*.o
+*.so
+*.so.*
+*.lib
+*.dylib
+*.bin
+appimage/appimagetool
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Cisco&#13;
+.github/notes/
+
+# 测试中间件
+*.log
+*.pid
+/tmp/

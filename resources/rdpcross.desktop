@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Exec=rdpcross
+Icon=rdpcross
+Name=RDPCross 远程桌面
+Name[en_US]=RDPCross Remote Desktop
+GenericName=Remote Desktop Client
+GenericName[zh_CN]=远程桌面客户端
+Comment=连接到 Windows 远程桌面（基于 FreeRDP，兼容 mstsc）
+Comment[en_US]=Connect to Windows Remote Desktop (FreeRDP based, mstsc compatible)
+Categories=Network;RemoteAccess;Qt;
+Terminal=false
+StartupWMClass=rdpcross
+Keywords=rdp;remote;desktop;windows;terminal;
