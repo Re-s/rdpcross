@@ -102,6 +102,30 @@ jobs:
             exit 1
           fi
 
+      - name: Smoke test AppImage (xcb)
+        run: |
+          AI=$(ls dist/*.AppImage | head -1)
+          chmod +x "$AI"
+          echo "smoke test: $AI"
+          set +e
+          Xvfb :77 -screen 0 1280x800x24 -nolisten tcp >/dev/null 2>&1 &
+          XPID=$!
+          sleep 3
+          DISPLAY=:77 timeout 20 "$AI" >/tmp/ai.log 2>&1
+          rc=$?
+          kill $XPID 2>/dev/null || true
+          set -e
+          # rc=124 表示被 timeout 杀掉 ⇒ GUI 一直正常运行
+          if [ "$rc" = "124" ]; then
+            echo "SMOKE OK: AppImage 以 xcb 平台持续运行 15s+"
+          else
+            echo "SMOKE FAIL (exit=$rc)"
+            cat /tmp/ai.log
+            exit 1
+          fi
+          grep -iqE "qt.qpa|platform plugin|failed to start" /tmp/ai.log \
+            && { echo "检测到 Qt 平台错误"; cat /tmp/ai.log; exit 1; } || true
+
       - name: Upload appimage
         uses: actions/upload-artifact@v4
         with:
