@@ -81,12 +81,15 @@ jobs:
           echo "=== Qt 版本 ==="
           dpkg -l | grep -E "^ii.*(qt6-base-dev|libqt6gui6)" || true
           echo "=== 系统平台插件目录 ==="
-          ls -la /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms/ 2>/dev/null || echo "MISSING"
-          echo "=== xvfb ==="
-          command -v xvfb-run Xvfb || true
-          echo "=== 直接 xvfb-run 跑二进制（抓 stderr）==="
-          timeout 25 xvfb-run -a -s "-screen 0 1280x800x24" \
-            ./build/rdpcross 2>&1 | tail -25 || true
+          ls /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms/ 2>/dev/null || echo "MISSING"
+          echo "=== xvfb 下 LD_DEBUG=libs 跑二进制 ==="
+          timeout 15 xvfb-run -a -- env LD_DEBUG=libs ./build/rdpcross \
+            >/dev/null 2>/tmp/ld.log || true
+          echo "calling init 总数: $(grep -c 'calling init' /tmp/ld.log)"
+          echo "--- xcb / plugins / qt 相关 ---"
+          grep "calling init" /tmp/ld.log | grep -iE "xcb|plugins/|qt6" | head -15 || echo "NONE"
+          echo "--- Qt 报错 ---"
+          grep -iE "qt.qpa|failed to start|cannot connect|Could not" /tmp/ld.log | head -10 || true
 
       - name: Package AppImage
         run: |
