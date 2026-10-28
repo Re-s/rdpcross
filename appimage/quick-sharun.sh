@@ -508,11 +508,12 @@ _get_icon() {
 
 # -d waits for Xvfb to report its display, so -a's 3s wait is not needed
 _set_xvfb_cmd() {
-	if xvfb-run --help 2>&1 | grep -q -- '--auto-display'; then
-		XVFB_CMD="xvfb-run -d -w 0.5 --"
-	else
-		XVFB_CMD="xvfb-run -a --"
-	fi
+	# 修复上游 bug：检测到 --auto-display 支持时上游用 "xvfb-run -d -w 0.5 --"，
+	# 但 Debian/Ubuntu 的 xvfb-run 没有 -d 选项（"invalid option -- 'd'"），
+	# 导致整个 XVFB_CMD 命令直接失败、被探测的程序从未运行、运行时 dlopen
+	# 的库（如 Qt 平台插件 libqxcb.so）永远不会被收集。
+	# 统一用 -a（--auto-display），所有 Debian/Ubuntu 版本都支持。
+	XVFB_CMD="xvfb-run -a --"
 }
 
 _sanity_check() {
