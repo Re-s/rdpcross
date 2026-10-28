@@ -47,6 +47,18 @@ export APPIMAGETOOL="$HERE/appimagetool"
 export OUTPATH="$OUT"
 "$HERE/quick-sharun.sh" "$APPDIR/usr/bin/rdpcross" || true   # 末尾的警告不影响产物
 
+# 3) 剔除本程序不需要的平台插件减体积
+# rdpcross 靠 X11 嵌入 freerdp 子窗口（XEmbed），wayland 原生平台不可用；
+# eglfs/linuxfb/vnc/kvkhrdisplay 均非桌面场景所需，保留 xcb + offscreen + minimal
+echo "-- 精简平台插件..."
+rm -rf "$APPDIR"/lib/qt6/plugins/platforms/libqwayland-*.so \
+        "$APPDIR"/lib/qt6/plugins/wayland-* \
+        "$APPDIR"/lib/qt6/plugins/platforms/libqeglfs.so \
+        "$APPDIR"/lib/qt6/plugins/platforms/libqlinuxfb.so \
+        "$APPDIR"/lib/qt6/plugins/platforms/libqvnc.so \
+        "$APPDIR"/lib/qt6/plugins/platforms/libqvkkhrdisplay.so 2>/dev/null || true
+ls "$APPDIR"/lib/qt6/plugins/platforms/ 2>/dev/null | sed 's/^/  platform: /'
+
 # 3) 打包（低压缩级别防 OOM）
 mkdir -p "$OUT"
 echo "-- 生成 AppImage..."
