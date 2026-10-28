@@ -79,7 +79,8 @@ jobs:
       - name: Package AppImage
         run: |
           cd appimage
-          chmod +x quick-sharun.sh
+          # 不依赖 git 文件模式（经 API 上传的 tree 条目可能丢失 +x 位）
+          chmod +x quick-sharun.sh build-appimage.sh
           export DWARFS_COMP="zstd:level=3"
           # 不能设 QT_QPA_PLATFORM=offscreen：否则 LD_DEBUG=libs 只抓到
           # libqoffscreen.so，libqxcb.so 永远不会被收集，用户机器上
