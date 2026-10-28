@@ -45,6 +45,10 @@ echo "-- quick-sharun 部署依赖（含 glibc）..."
 export APPDIR="$APPDIR"
 export APPIMAGETOOL="$HERE/appimagetool"
 export OUTPATH="$OUT"
+# Mesa 软件渲染栈（libLLVM 137MB + libgallium 42MB）占体积大头且本程序
+# 不需要 —— 留在宿主机，运行时通过 cross-libc-dlopen 按需加载。
+# 若 Smoke test 失败（Qt GUI 无法初始化），回退方法：删掉此 export。
+export USE_HOST_DRIVERS_EXPERIMENTAL=1
 "$HERE/quick-sharun.sh" "$APPDIR/usr/bin/rdpcross" || true   # 末尾的警告不影响产物
 
 # 3) 剔除本程序不需要的平台插件减体积
