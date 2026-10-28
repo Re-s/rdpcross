@@ -202,9 +202,12 @@ jobs:
           echo "version=$version"
           # arm64 裸二进制重命名，避免与 AppImage 混淆
           mv artifacts/rdpcross-arm64/rdpcross "artifacts/rdpcross-arm64/rdpcross-${version}-arm64"
+          # release 资产名只允许 ASCII：原名含中文会被 GitHub 清理成乱码
+          mv artifacts/rdpcross-appimage/*.AppImage \
+            "artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage"
           gh release create "v$version" --target main --title "RDPCross v$version" \
             --generate-notes \
-            artifacts/rdpcross-appimage/*.AppImage \
+            artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage \
             artifacts/rdpcross-arm64/rdpcross-${version}-arm64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
