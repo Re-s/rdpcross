@@ -80,16 +80,22 @@ jobs:
         run: |
           echo "=== Qt 版本 ==="
           dpkg -l | grep -E "^ii.*(qt6-base-dev|libqt6gui6)" || true
-          echo "=== 系统平台插件目录 ==="
-          ls /usr/lib/x86_64-linux-gnu/qt6/plugins/platforms/ 2>/dev/null || echo "MISSING"
-          echo "=== xvfb 下 LD_DEBUG=libs 跑二进制 ==="
-          timeout 15 xvfb-run -a -- env LD_DEBUG=libs ./build/rdpcross \
-            >/dev/null 2>/tmp/ld.log || true
-          echo "calling init 总数: $(grep -c 'calling init' /tmp/ld.log)"
-          echo "--- xcb / plugins / qt 相关 ---"
-          grep "calling init" /tmp/ld.log | grep -iE "xcb|plugins/|qt6" | head -15 || echo "NONE"
+          echo "=== ldd 二进制 ==="
+          ldd ./build/rdpcross | grep -E "qt6|not found" | head -8 || true
+          echo "=== xvfb 下 LD_DEBUG=libs 跑二进制（含 exit code / Xvfb 日志）==="
+          set +e
+          timeout 25 xvfb-run -a -e /tmp/xvfb.err -s "-screen 0 1280x800x24" \
+            env LD_DEBUG=libs ./build/rdpcross >/dev/null 2>/tmp/ld.log
+          echo "xvfb-run exit=$?"
+          set -e
+          echo "--- Xvfb stderr (/tmp/xvfb.err) ---"
+          head -10 /tmp/xvfb.err 2>/dev/null || echo "no xvfb.err"
+          echo "--- ld.log 行数: $(wc -l < /tmp/ld.log 2>/dev/null || echo 0) ---"
+          head -8 /tmp/ld.log 2>/dev/null || true
+          echo "--- xcb/plugins 相关 ---"
+          grep "calling init" /tmp/ld.log 2>/dev/null | grep -iE "xcb|plugins/" | head -10 || echo "NONE"
           echo "--- Qt 报错 ---"
-          grep -iE "qt.qpa|failed to start|cannot connect|Could not" /tmp/ld.log | head -10 || true
+          grep -iE "qt.qpa|failed to start|cannot connect|Could not" /tmp/ld.log 2>/dev/null | head -5 || true
 
       - name: Package AppImage
         run: |
