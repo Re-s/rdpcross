@@ -78,24 +78,26 @@ jobs:
 
       - name: Debug Qt platform plugin loading
         run: |
-          echo "=== Qt 版本 ==="
-          dpkg -l | grep -E "^ii.*(qt6-base-dev|libqt6gui6)" || true
-          echo "=== ldd 二进制 ==="
-          ldd ./build/rdpcross | grep -E "qt6|not found" | head -8 || true
-          echo "=== xvfb 下 LD_DEBUG=libs 跑二进制（含 exit code / Xvfb 日志）==="
+          echo "=== 基线：LD_DEBUG=libs /bin/true ==="
+          LD_DEBUG=libs /bin/true 2>/tmp/true.log || true
+          echo "true.log 行数: $(wc -l < /tmp/true.log 2>/dev/null || echo 0)"
+          head -3 /tmp/true.log 2>/dev/null || true
+          echo "=== 不经 xvfb-run：自启 Xvfb + DISPLAY 直接跑 ==="
           set +e
-          timeout 25 xvfb-run -a -e /tmp/xvfb.err -s "-screen 0 1280x800x24" \
-            env LD_DEBUG=libs ./build/rdpcross >/dev/null 2>/tmp/ld.log
-          echo "xvfb-run exit=$?"
-          set -e
-          echo "--- Xvfb stderr (/tmp/xvfb.err) ---"
-          head -10 /tmp/xvfb.err 2>/dev/null || echo "no xvfb.err"
-          echo "--- ld.log 行数: $(wc -l < /tmp/ld.log 2>/dev/null || echo 0) ---"
-          head -8 /tmp/ld.log 2>/dev/null || true
-          echo "--- xcb/plugins 相关 ---"
-          grep "calling init" /tmp/ld.log 2>/dev/null | grep -iE "xcb|plugins/" | head -10 || echo "NONE"
+          Xvfb :77 -screen 0 1280x800x24 -nolisten tcp >/tmp/x77.log 2>&1 &
+          XPID=$!
+          sleep 3
+          DISPLAY=:77 LD_DEBUG=libs ./build/rdpcross >/dev/null 2>/tmp/ld2.log &
+          RPID=$!
+          sleep 10
+          kill -0 $RPID 2>/dev/null && echo "rdpcross: RUNNING" || echo "rdpcross: EXITED"
+          echo "ld2.log 行数: $(wc -l < /tmp/ld2.log 2>/dev/null || echo 0)"
+          echo "--- calling init xcb/plugins ---"
+          grep "calling init" /tmp/ld2.log 2>/dev/null | grep -iE "xcb|plugins/" | head -12 || echo "NONE"
           echo "--- Qt 报错 ---"
-          grep -iE "qt.qpa|failed to start|cannot connect|Could not" /tmp/ld.log 2>/dev/null | head -5 || true
+          head -5 /tmp/ld2.log 2>/dev/null
+          kill $RPID $XPID 2>/dev/null || true
+          set -e
 
       - name: Package AppImage
         run: |
