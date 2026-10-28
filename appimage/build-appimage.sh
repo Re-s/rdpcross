@@ -34,11 +34,18 @@ install -m 644 "$ROOT/resources/rdpcross.desktop" "$APPDIR/"
 install -m 644 "$ROOT/resources/rdpcross.svg" "$APPDIR/.DirIcon"
 
 # 2) quick-sharun：部署 sharun + glibc + Qt6 全部依赖，生成 AppRun
+# 关键：必须传「二进制」而不是 AppDir 目录。
+# 只有传二进制，quick-sharun 才会对它跑 ldd、在其 NEEDED_LIBS 里
+# 检测到 libQt*Gui.so，进而触发 DEPLOY_QT 分支 —— 该分支会把
+# qt6/plugins/platforms/* 的全部平台插件（libqxcb.so/libqoffscreen.so/
+# libqwayland-*.so 等）部署进 AppDir。若传目录，平台插件只能靠
+# STRACE（LD_DEBUG=libs 运行时收集），在某些 CI 环境（xvfb/Qt 行为
+# 差异）下收集不到，AppImage 缺 xcb 插件 → 用户机器崩溃。
 echo "-- quick-sharun 部署依赖（含 glibc）..."
 export APPDIR="$APPDIR"
 export APPIMAGETOOL="$HERE/appimagetool"
 export OUTPATH="$OUT"
-"$HERE/quick-sharun.sh" "$APPDIR" || true   # 末尾的警告不影响产物
+"$HERE/quick-sharun.sh" "$APPDIR/usr/bin/rdpcross" || true   # 末尾的警告不影响产物
 
 # 3) 打包（低压缩级别防 OOM）
 mkdir -p "$OUT"

@@ -76,29 +76,6 @@ jobs:
           restore-keys: |
             appimagetool-${{ runner.os }}-
 
-      - name: Debug Qt platform plugin loading
-        run: |
-          echo "=== 基线：LD_DEBUG=libs /bin/true ==="
-          LD_DEBUG=libs /bin/true 2>/tmp/true.log || true
-          echo "true.log 行数: $(wc -l < /tmp/true.log 2>/dev/null || echo 0)"
-          head -3 /tmp/true.log 2>/dev/null || true
-          echo "=== 不经 xvfb-run：自启 Xvfb + DISPLAY 直接跑 ==="
-          set +e
-          Xvfb :77 -screen 0 1280x800x24 -nolisten tcp >/tmp/x77.log 2>&1 &
-          XPID=$!
-          sleep 3
-          DISPLAY=:77 LD_DEBUG=libs ./build/rdpcross >/dev/null 2>/tmp/ld2.log &
-          RPID=$!
-          sleep 10
-          kill -0 $RPID 2>/dev/null && echo "rdpcross: RUNNING" || echo "rdpcross: EXITED"
-          echo "ld2.log 行数: $(wc -l < /tmp/ld2.log 2>/dev/null || echo 0)"
-          echo "--- calling init xcb/plugins ---"
-          grep "calling init" /tmp/ld2.log 2>/dev/null | grep -iE "xcb|plugins/" | head -12 || echo "NONE"
-          echo "--- Qt 报错 ---"
-          head -5 /tmp/ld2.log 2>/dev/null
-          kill $RPID $XPID 2>/dev/null || true
-          set -e
-
       - name: Package AppImage
         run: |
           cd appimage
