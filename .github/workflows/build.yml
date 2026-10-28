@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
   release:
     types: [published]
 
@@ -44,7 +45,9 @@ jobs:
           echo "freerdp: '${FQP:-none}'"
           sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build \
             pkg-config patchelf python3 wget curl qt6-base-dev "$FQP" \
-            libasound2-dev libpulse-dev libx11-dev
+            libasound2-dev libpulse-dev libx11-dev xvfb
+          # xvfb 必装：quick-sharun 用 xvfb-run 提供显示，让 Qt 以 xcb 平台
+          # 启动，LD_DEBUG=libs 才能抓到运行时 dlopen 的平台插件 libqxcb.so
 
       # 缓存层 2：cmake 输出树
       - name: Cache build dir
@@ -78,9 +81,10 @@ jobs:
           cd appimage
           chmod +x quick-sharun.sh
           export DWARFS_COMP="zstd:level=3"
+          # 不能设 QT_QPA_PLATFORM=offscreen：否则 LD_DEBUG=libs 只抓到
+          # libqoffscreen.so，libqxcb.so 永远不会被收集，用户机器上
+          # Qt 回退系统插件路径 → 版本不兼容 → 启动崩溃
           ./build-appimage.sh
-        env:
-          QT_QPA_PLATFORM: offscreen
 
       - name: Upload appimage
         uses: actions/upload-artifact@v4
@@ -138,9 +142,14 @@ jobs:
     name: Create Release
     runs-on: ubuntu-latest
     needs: [build-appimage, build-arm64]
+    # 手动触发（workflow_dispatch）；release published 条件保留。
+    # 不能只依赖 release 事件 —— 那样本 job 永远不会运行
     if: >-
-      ${{ github.event_name == 'release' && github.event.action == 'published' }}
+      ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'release' && github.event.action == 'published') }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -150,7 +159,11 @@ jobs:
         run: |
           version=$(grep kAppVersion src/constants.h | sed 's/.*"\(.*\)".*/\1/')
           echo "version=$version"
+          # arm64 裸二进制重命名，避免与 AppImage 混淆
+          mv artifacts/rdpcross-arm64/rdpcross "artifacts/rdpcross-arm64/rdpcross-${version}-arm64"
           gh release create "v$version" --target main --title "RDPCross v$version" \
-            $(ls artifacts/*/rdpcross-*.AppImage 2>/dev/null | tr '\n' ' ')
+            --generate-notes \
+            artifacts/rdpcross-appimage/*.AppImage \
+            artifacts/rdpcross-arm64/rdpcross-${version}-arm64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
