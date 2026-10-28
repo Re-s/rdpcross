@@ -127,6 +127,16 @@ jobs:
           grep -iqE "qt.qpa|platform plugin|failed to start" /tmp/ai.log \
             && { echo "检测到 Qt 平台错误"; cat /tmp/ai.log; exit 1; } || true
 
+      - name: Analyze AppDir size
+        run: |
+          du -sh appimage/AppDir 2>/dev/null || true
+          echo "--- AppDir/lib 子目录 Top 15 ---"
+          du -sh appimage/AppDir/lib/* 2>/dev/null | sort -rh | head -15
+          echo "--- libQt6* 大文件 Top 10 ---"
+          ls -laS appimage/AppDir/lib/libQt6* 2>/dev/null | head -11
+          echo "--- qt6 plugins 子目录 ---"
+          du -sh appimage/AppDir/lib/qt6/plugins/* 2>/dev/null | sort -rh
+
       - name: Upload appimage
         uses: actions/upload-artifact@v4
         with:
