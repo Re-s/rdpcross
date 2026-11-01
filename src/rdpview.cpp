@@ -250,7 +250,9 @@ void RdpView::fitChild() {
             placeChild(view, m_sessionSize);
             return;
         }
-        // 2) 服务器不支持动态分辨率（caps 宣告缺失）且宽限期已过：原分辨率居中 letterbox
+        // 2) 服务器不支持动态分辨率（caps 宣告缺失）且已确知会话分辨率：
+        //    原分辨率居中 letterbox。窗口小于会话时同样如此（内容 1:1 完整，
+        //    由外层滚动条处理），绝不压扁内容造成黑边/变形
         if (!m_dynamicActive && m_sessionSize.isValid() && m_attachedAt.hasExpired(1500)) {
             if (!m_dynamicUnsupportedHinted) {
                 m_dynamicUnsupportedHinted = true;
@@ -260,7 +262,15 @@ void RdpView::fitChild() {
             placeChild(view, m_sessionSize);
             return;
         }
-        // 3) 已支持或仍在宽限期：铺满。ConfigureNotify 即向服务器请求该分辨率
+        // 3) 已支持或仍在宽限期：铺满。ConfigureNotify 即向服务器请求该分辨率。
+        //    若宽限期内视图小于已知会话分辨率，直接居中而不请求缩分辨率，
+        //    避免服务器不支持时内容被压在左上角
+        if (!m_dynamicActive && m_sessionSize.isValid()
+            && (view.width() < m_sessionSize.width() - 8
+                || view.height() < m_sessionSize.height() - 8)) {
+            placeChild(view, m_sessionSize);
+            return;
+        }
         placeChild(view, view);
         return;
     }
