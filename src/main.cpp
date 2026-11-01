@@ -7,6 +7,7 @@
 #include "sessionwindow.h"
 #include "config.h"
 #include "constants.h"
+#include "version_gen.h"
 
 // [rdpcross] 前缀的状态行：便于终端/自动化观察连接状态
 void logStatus(const QString &msg) {
@@ -18,7 +19,7 @@ int main(int argc, char **argv) {
     QApplication app(argc, argv);
     app.setApplicationName("RDPCross");
     app.setApplicationDisplayName("RDPCross 远程桌面");
-    app.setApplicationVersion(constants::kAppVersion);
+    app.setApplicationVersion(version::kAppVersionFull);
     app.setOrganizationName("RDPCross");
 
     QCommandLineParser parser;

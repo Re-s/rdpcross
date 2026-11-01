@@ -141,7 +141,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: rdpcross-appimage
-          path: dist/*.AppImage
+          path: |
+            # 产物：AppImage + 版号文件（做 CI 发布的来源）
+            dist/*.AppImage
+            dist/VERSION_FULL.txt
           retention-days: 7
 
   # ---------------------------------------------------------------
@@ -208,7 +211,8 @@ jobs:
 
       - name: Create Release
         run: |
-          version=$(grep kAppVersion src/constants.h | sed 's/.*"\(.*\)".*/\1/')
+          # 从构建产物取完整构建版号（vrndis 风格：2.0.0-N-g<hash>）
+          version=$(cat artifacts/rdpcross-appimage/VERSION_FULL.txt)
           echo "version=$version"
           # arm64 裸二进制重命名，避免与 AppImage 混淆
           mv artifacts/rdpcross-arm64/rdpcross "artifacts/rdpcross-arm64/rdpcross-${version}-arm64"

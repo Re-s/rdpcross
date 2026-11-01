@@ -11,7 +11,7 @@ set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
-VERSION="${1:-2.0.0}"
+VERSION_FULL="$(cat "$ROOT/build/VERSION_FULL.txt" 2>/dev/null || echo 2.0.0)"
 APPDIR="$HERE/AppDir"
 OUT="$ROOT/dist"
 
@@ -67,7 +67,14 @@ ls "$APPDIR"/lib/qt6/plugins/platforms/ 2>/dev/null | sed 's/^/  platform: /'
 mkdir -p "$OUT"
 echo "-- 生成 AppImage..."
 cd "$HERE"
-VERSION="$VERSION" DWARFS_COMP="zstd:level=3" ./appimagetool "$APPDIR" -o "$OUT"
+VERSION="$VERSION_FULL" DWARFS_COMP="zstd:level=3" ./appimagetool "$APPDIR" -o "$OUT"
+
+# 3) 统一文件名（ascii，便于 CI 查找和 release）
+out="$(ls "$OUT"/*.AppImage | head -1)"
+mv "$out" "$OUT/rdpcross-$VERSION_FULL-anylinux-x86_64.AppImage"
+
+# 4) 落盘版本：CI 发布和远程看发行名单用
+cp "$ROOT/build/VERSION_FULL.txt" "$OUT/VERSION_FULL.txt" 2>/dev/null || echo "$VERSION_FULL" > "$OUT/VERSION_FULL.txt"
 
 echo "-- 完成："
-ls -lh "$OUT"/*.AppImage
+ls -lh "$OUT/"*.AppImage "$OUT/VERSION_FULL.txt"

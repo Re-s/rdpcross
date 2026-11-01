@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "constants.h"
+#include "version_gen.h"
 
 #include <QApplication>
 #include <QToolBar>

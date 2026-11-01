@@ -1,0 +1,14 @@
+#pragma once
+
+#include <QString>
+
+namespace version {
+
+inline const char* kAppVersionBase = "@APP_VERSION_BASE@";
+inline const char* kAppBuildHash = "@APP_VERSION_HASH@";
+inline const char* kAppCommits = "@APP_VERSION_COMMITS@";
+
+inline const QString kAppVersionFull = QStringLiteral("%1-%2-g%3")
+    .arg(kAppVersionBase, kAppCommits, kAppBuildHash);
+
+}  // namespace version
