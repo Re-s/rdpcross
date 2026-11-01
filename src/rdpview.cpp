@@ -123,6 +123,7 @@ void RdpView::paintEvent(QPaintEvent *) {
 
 void RdpView::resizeEvent(QResizeEvent *) {
     m_hintLabel->setGeometry(rect());
+    m_serverLocked = false;  // 视图变了：允许重新向服务器请求该尺寸的分辨率
     fitChild();
 }
 
@@ -163,6 +164,11 @@ void RdpView::attachChild(quint32 child) {
         m_hintLabel->hide();
         m_lastChildSize = QSize();
         m_appliedSize = QSize();
+        m_sessionSize = QSize();
+        m_dynamicActive = false;
+        m_dynamicUnsupportedHinted = false;
+        m_serverLocked = false;
+        m_attachedAt.start();
         // 先按 xfreerdp 自己给出的尺寸校正宿主窗口，再让它填满视图，
         // 这样默认就是 1:1，不会出现缩放模糊/黑边。
         checkChildSize();
@@ -176,14 +182,55 @@ void RdpView::attachChild(quint32 child) {
 // 只有「不是我们自己设的」尺寸变化才向上报告。
 void RdpView::checkChildSize() {
     if (!m_childWid || !m_x11) return;
+    probeDynamicActive();
     int w = 0, h = 0;
     if (!m_x11->windowSize(m_childWid, &w, &h)) return;
     if (w <= 0 || h <= 0) return;
     const QSize sz(w, h);
-    if (sz == m_lastChildSize) return;
-    m_lastChildSize = sz;
-    if (sz == m_appliedSize) return;  // fitChild 自己设的，不算会话变化
-    emit sessionSizeChanged(sz);
+    if (sz != m_lastChildSize) {
+        m_lastChildSize = sz;
+        if (sz != m_appliedSize) {
+            // 子窗口尺寸变化且不是我们配置的：权威的会话分辨率
+            m_sessionSize = sz;
+            // 若我们此前已拉伸/落位过，说明这是服务器对一次分辨率请求的响应：
+            // 记为「支持动态分辨率」并锁定到服务器给的尺寸，直到用户再改窗口，
+            // 避免「请求-回绝」来回打架。attach 时的初始尺寸不算响应。
+            const bool isResponse = m_appliedSize.isValid();
+            if (isResponse) {
+                m_dynamicActive = true;
+                m_serverLocked = true;
+            }
+            emit sessionSizeChanged(sz);
+            // 服务器给的比当前视图小（窗口最大化等无法收缩的场景）：居中落位
+            const QSize view(qMax(width(), 64), qMax(height(), 64));
+            if (isResponse
+                && (sz.width() < view.width() - 8 || sz.height() < view.height() - 8))
+                QTimer::singleShot(0, this, &RdpView::fitChild);
+        }
+    }
+    // dynamic 兜底：服务器既未宣告支持、也未响应过（hints 始终是默认签名），
+    // 宽限期后以原会话分辨率居中，而不是让 1:1 内容堆在左上角留黑边
+    if (m_profile.resizeMode == constants::kResizeDynamic && !m_dynamicActive && !m_serverLocked
+        && m_sessionSize.isValid() && m_attachedAt.hasExpired(1500))
+        fitChild();
+}
+
+void RdpView::probeDynamicActive() {
+    if (m_dynamicActive || !m_childWid || !m_x11) return;
+    int minW = -1, minH = -1, maxW = -1, maxH = -1;
+    if (!m_x11->normalHints(m_childWid, &minW, &minH, &maxW, &maxH)) return;
+    // xfreerdp 带 /dynamic-resolution 时默认写 min=1/max=16384（xf_ResizeDesktopWindow）；
+    // 服务器宣告 DisplayControlCaps 后改写为 min=320/max=8192（xf_disp_set_window_resizable）。
+    // 以「偏离默认签名」为判据，对数值变化保持容忍。
+    const bool active = (maxW > 0 && maxW != 16384) || minW > 1;
+    if (!active) return;
+    m_dynamicActive = true;
+    if (m_dynamicUnsupportedHinted) {
+        m_dynamicUnsupportedHinted = false;
+        emit statusChanged("检测到服务器支持动态分辨率，已铺满");
+    }
+    // 之前按「不支持」居中了，现在重新铺满（铺满即向服务器请求新分辨率）
+    QTimer::singleShot(0, this, &RdpView::fitChild);
 }
 
 void RdpView::notifyChildWindowSeen() {
@@ -195,13 +242,47 @@ void RdpView::notifyChildWindowSeen() {
 void RdpView::fitChild() {
     if (!m_childWid) return;
     if (m_profile.resizeMode == constants::kResizeFixed) return;  // 固定分辨率：外层滚动条
-    const QSize target(qMax(width(), 64), qMax(height(), 64));
-    int cw = 0, ch = 0;
-    if (m_x11->windowSize(m_childWid, &cw, &ch) && QSize(cw, ch) == target)
-        return;  // 已经是目标尺寸，避免无意义的 ConfigureNotify 风暴
-    m_appliedSize = target;
-    m_lastChildSize = target;
-    m_x11->resize(m_childWid, target.width(), target.height());
+    const QSize view(qMax(width(), 64), qMax(height(), 64));
+
+    if (m_profile.resizeMode == constants::kResizeDynamic) {
+        // 1) 服务器已对一个分辨率作出决定（含上限场景）：以它为准居中，直到用户再改窗口
+        if (m_serverLocked && m_sessionSize.isValid()) {
+            placeChild(view, m_sessionSize);
+            return;
+        }
+        // 2) 服务器不支持动态分辨率（caps 宣告缺失）且宽限期已过：原分辨率居中 letterbox
+        if (!m_dynamicActive && m_sessionSize.isValid() && m_attachedAt.hasExpired(1500)) {
+            if (!m_dynamicUnsupportedHinted) {
+                m_dynamicUnsupportedHinted = true;
+                emit statusChanged("服务器不支持动态分辨率：以原分辨率居中显示，"
+                                   "可点工具条「智能缩放铺满」切换为缩放铺满");
+            }
+            placeChild(view, m_sessionSize);
+            return;
+        }
+        // 3) 已支持或仍在宽限期：铺满。ConfigureNotify 即向服务器请求该分辨率
+        placeChild(view, view);
+        return;
+    }
+
+    // smart：铺满，由 FreeRDP 缩放内容
+    placeChild(view, view);
+}
+
+// 把子窗口按 content 尺寸放置到 view 上：content==view 铺满，content<view 居中，
+// content>view 置于左上角（由外层滚动条处理）
+void RdpView::placeChild(const QSize &view, const QSize &content) {
+    if (!m_childWid || !m_x11) return;
+    const QSize want(qMax(content.width(), 64), qMax(content.height(), 64));
+    const int x = qMax((view.width() - want.width()) / 2, 0);
+    const int y = qMax((view.height() - want.height()) / 2, 0);
+    int cx = 0, cy = 0, cw = 0, ch = 0;
+    if (m_x11->windowGeometry(m_childWid, &cx, &cy, &cw, &ch)
+        && QSize(cw, ch) == want && cx == x && cy == y)
+        return;  // 已就位，避免无意义的 ConfigureNotify 风暴
+    m_appliedSize = want;
+    m_lastChildSize = want;
+    m_x11->moveResize(m_childWid, x, y, want.width(), want.height());
 }
 
 void RdpView::focusChild() {

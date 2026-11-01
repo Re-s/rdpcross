@@ -5,6 +5,7 @@
 #include <QSize>
 #include <QProcess>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QString>
 #include <QLabel>
 
@@ -31,7 +32,9 @@ public:
     void stop();               // SIGTERM，不阻塞
     void stopAndKill();        // 强杀
     bool isConnected() const { return m_connected; }
-    QSize sessionSize() const { return m_lastChildSize; }
+    QSize sessionSize() const {
+        return m_sessionSize.isValid() ? m_sessionSize : m_lastChildSize;
+    }
     bool isRunning() const { return m_proc && m_proc->state() != QProcess::NotRunning; }
 
     void setHint(const QString &text);
@@ -70,6 +73,10 @@ private:
     void focusChild();
     void handleLine(const QString &line);
     void notifyChildWindowSeen();
+    // 把子窗口按 content 尺寸放置：content < view 时居中（letterbox），=view 时铺满
+    void placeChild(const QSize &view, const QSize &content);
+    // 检测服务器是否支持 RDPEDISP 动态分辨率（读子窗口 WM_NORMAL_HINTS）
+    void probeDynamicActive();
 
     ConnectionProfile m_profile;
     QString m_password;
@@ -83,7 +90,15 @@ private:
     X11Helper *m_x11 = nullptr;
     QLabel *m_hintLabel = nullptr;
     QSize m_lastChildSize;
-    QSize m_appliedSize;  // 我们最近一次 ConfigureWindow 出去的尺寸
+    QSize m_appliedSize;  // 我们最近一次配置出去的子窗口尺寸（铺满或居中后的目标）
+    QSize m_sessionSize;  // 服务器报告（非我们配置）的会话分辨率
+
+    // dynamic 模式：服务器是否已宣告支持动态分辨率（DisplayControlCaps）
+    bool m_dynamicActive = false;
+    bool m_dynamicUnsupportedHinted = false;
+    // 服务器已对一个会话分辨率作出决定（响应过我们的请求）→ 以它为准，直到用户再改窗口
+    bool m_serverLocked = false;
+    QElapsedTimer m_attachedAt;  // 子窗口 attach 时刻，用于给 caps 到达留宽限
 
     QByteArray m_buffer;
     QStringList m_log;

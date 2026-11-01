@@ -75,6 +75,9 @@ int main(int argc, char **argv) {
         if (pos.size() > 2) p.password = pos.at(2);
         if (qEnvironmentVariableIsSet("RDPCROSS_TLS")) p.security = constants::kSecTls;
         if (qEnvironmentVariableIsSet("RDPCROSS_CERT_IGNORE")) p.certMode = constants::kCertIgnore;
+        // 测试/QA 钩子：RDPCROSS_RESIZE=smart|dynamic|fixed 指定缩放模式
+        if (const auto rm = qEnvironmentVariable("RDPCROSS_RESIZE"); !rm.isEmpty())
+            p.resizeMode = rm;
         auto *win = new SessionWindow(p, p.password, true);
         QObject::connect(win, &SessionWindow::sessionClosed, &app, [&app](const ConnectionProfile &) {
             logStatus("session closed");

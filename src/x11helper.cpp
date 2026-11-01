@@ -41,12 +41,14 @@ quint32 X11Helper::largestChild(quint32 parent) const {
     return best;
 }
 
-bool X11Helper::resize(quint32 window, int w, int h) const {
+bool X11Helper::moveResize(quint32 window, int x, int y, int w, int h) const {
     if (!valid() || !window) return false;
     XWindowChanges ch;
+    ch.x = x;
+    ch.y = y;
     ch.width = w;
     ch.height = h;
-    XConfigureWindow(d->display, window, CWWidth | CWHeight, &ch);
+    XConfigureWindow(d->display, window, CWX | CWY | CWWidth | CWHeight, &ch);
     XFlush(d->display);
     return true;
 }
@@ -57,6 +59,29 @@ bool X11Helper::windowSize(quint32 window, int *w, int *h) const {
     if (!XGetWindowAttributes(d->display, window, &attr)) return false;
     if (w) *w = attr.width;
     if (h) *h = attr.height;
+    return true;
+}
+
+bool X11Helper::windowGeometry(quint32 window, int *x, int *y, int *w, int *h) const {
+    if (!valid() || !window) return false;
+    XWindowAttributes attr;
+    if (!XGetWindowAttributes(d->display, window, &attr)) return false;
+    if (x) *x = attr.x;
+    if (y) *y = attr.y;
+    if (w) *w = attr.width;
+    if (h) *h = attr.height;
+    return true;
+}
+
+bool X11Helper::normalHints(quint32 window, int *minW, int *minH, int *maxW, int *maxH) const {
+    if (!valid() || !window) return false;
+    XSizeHints hints{};
+    long supplied = 0;
+    if (!XGetWMNormalHints(d->display, window, &hints, &supplied)) return false;
+    if (minW) *minW = (supplied & PMinSize) ? hints.min_width : -1;
+    if (minH) *minH = (supplied & PMinSize) ? hints.min_height : -1;
+    if (maxW) *maxW = (supplied & PMaxSize) ? hints.max_width : -1;
+    if (maxH) *maxH = (supplied & PMaxSize) ? hints.max_height : -1;
     return true;
 }
 
