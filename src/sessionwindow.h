@@ -62,6 +62,7 @@ private:
     QLabel *m_statusLabel = nullptr;
     QAction *m_actFullscreen = nullptr, *m_actReconnect = nullptr;
     QAction *m_actOneToOne = nullptr;
+    QAction *m_actFitFill = nullptr;  // dynamic 模式专用：切到智能缩放以铺满窗口
 
     bool m_full = false;
     bool m_framelessSpan = false;

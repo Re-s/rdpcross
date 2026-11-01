@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QToolBar>
+#include <QMenuBar>
 #include <QStatusBar>
 #include <QMenu>
 #include <QMessageBox>
@@ -19,6 +20,7 @@
 
 #include "config.h"
 #include "credentialsdialog.h"
+#include "aboutdialog.h"
 #include "freerdpargs.h"
 #include "rdpfile.h"
 #include "sessionwindow.h"
@@ -84,6 +86,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     auto *actExport = new QAction("导出 .rdp…", this);
     connect(actExport, &QAction::triggered, this, &MainWindow::onExportRdp);
     tb->addAction(actExport);
+
+    // --- 菜单栏（帮助）---
+    auto *mHelp = menuBar()->addMenu("帮助(&H)");
+    auto *actAbout = mHelp->addAction("关于 RDPCross(&A)…", QKeySequence::HelpContents);
+    connect(actAbout, &QAction::triggered, this, &MainWindow::onAbout);
 
     // --- 状态栏 ---
     auto *sb = statusBar();
@@ -357,6 +364,11 @@ void MainWindow::launch(ConnectionProfile profile, const QString &password) {
 void MainWindow::onSessionClosed(const ConnectionProfile &profile) {
     (void)profile;
     refreshTree();
+}
+
+void MainWindow::onAbout() {
+    AboutDialog dlg(this);
+    dlg.exec();
 }
 
 // ================================================================== 关闭

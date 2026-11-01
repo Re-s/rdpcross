@@ -35,6 +35,7 @@ set(SOURCES
     src/sessionwindow.cpp
     src/settingsdialog.cpp
     src/credentialsdialog.cpp
+    src/aboutdialog.cpp
     src/mainwindow.cpp
 )
 

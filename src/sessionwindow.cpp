@@ -2,6 +2,7 @@
 
 #include "constants.h"
 #include "config.h"
+#include "aboutdialog.h"
 
 #include <QApplication>
 #include <QGuiApplication>
@@ -96,6 +97,27 @@ SessionWindow::SessionWindow(const ConnectionProfile &profile, const QString &pa
     m_actReconnect = new QAction("重新连接", this);
     connect(m_actReconnect, &QAction::triggered, this, &SessionWindow::reconnect);
     tb->addAction(m_actReconnect);
+
+    // dynamic 模式下提供一键「智能缩放铺满」：服务器不支持动态分辨率时内容只居中而不铺满，
+    // 用户点此切换为 smart 模式（内容等比缩放铺满整个窗口）
+    m_actFitFill = new QAction("智能缩放铺满", this);
+    m_actFitFill->setToolTip("切换为智能缩放模式：内容等比缩放铺满整个窗口");
+    m_actFitFill->setVisible(m_profile.resizeMode == constants::kResizeDynamic);
+    connect(m_actFitFill, &QAction::triggered, this, [this] {
+        if (!m_view) return;
+        m_profile.resizeMode = constants::kResizeSmart;
+        m_actFitFill->setVisible(false);
+        onStatus("已切换为智能缩放模式，正在重连 …");
+        reconnect();
+    });
+    tb->addAction(m_actFitFill);
+
+    auto *actAbout = new QAction("关于", this);
+    connect(actAbout, &QAction::triggered, this, [this] {
+        AboutDialog dlg(this);
+        dlg.exec();
+    });
+    tb->addAction(actAbout);
 
     auto *actDisc = new QAction("断开", this);
     connect(actDisc, &QAction::triggered, this, [this] { maybeClose(); });

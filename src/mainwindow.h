@@ -43,6 +43,7 @@ private slots:
     void onExportRdp();
     void onQuickConnect();
     void onSessionClosed(const ConnectionProfile &profile);
+    void onAbout();
 
 private:
     void refreshTree();
