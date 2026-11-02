@@ -191,11 +191,12 @@ void RdpView::checkChildSize() {
 
     // 修复：smart 模式下，子窗口必须始终铺满视图。
     // 远端（服务器屏幕切换/显示器决议）会不断把子窗口拉回它自己的桌面分辨率，
-    // 比如从视图拉的 1080 回到主机的 900，于是右/下侧留下永久的视图背景黑边。
-    // 因此每 300ms 检查一次：只要子窗口比视图小，就重新铺满，
+    // 比如从视图 1920x1080 回到远端的 900，于是右/下侧留下永久的视图背景黑边。
+    // 因此每 300ms 检查一次：只要子窗口不是视图的尺寸，就重新铺满，
     // 不被 m_lastChildSize/m_appliedSize 状态机的高水位挡住。
     if (m_profile.resizeMode == constants::kResizeSmart) {
-        if (sz.width() < view.width() - 8 || sz.height() < view.height() - 8)
+        // 只要子窗口不填视图，就强制铺满——消除黑边。
+        if (sz != view)
             QTimer::singleShot(0, this, &RdpView::fitChild);
     }
     if (sz != m_lastChildSize) {
