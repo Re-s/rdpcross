@@ -77,6 +77,9 @@ private:
     void placeChild(const QSize &view, const QSize &content);
     // 检测服务器是否支持 RDPEDISP 动态分辨率（读子窗口 WM_NORMAL_HINTS）
     void probeDynamicActive();
+    // Qt 部件尺寸是逻辑像素，X11 协议（XConfigureWindow/XGetWindowAttributes）
+    // 用设备像素。高分屏（150% 等）下不换算会让铺满尺寸只剩 1/dpr，留黑边。
+    qreal dpr() const { return qMax(qreal(1), devicePixelRatioF()); }
 
     ConnectionProfile m_profile;
     QString m_password;

@@ -186,7 +186,9 @@ void RdpView::checkChildSize() {
     int w = 0, h = 0;
     if (!m_x11->windowSize(m_childWid, &w, &h)) return;
     if (w <= 0 || h <= 0) return;
-    const QSize sz(w, h);
+    // X11 返回的是设备像素；内部状态机一律用逻辑像素，与视图尺寸可比
+    const qreal s = dpr();
+    const QSize sz(qRound(w / s), qRound(h / s));
     const QSize view(qMax(width(), 64), qMax(height(), 64));
 
     // 修复：smart 模式下，子窗口必须始终铺满视图。
@@ -297,13 +299,17 @@ void RdpView::placeChild(const QSize &view, const QSize &content) {
     const QSize want(qMax(content.width(), 64), qMax(content.height(), 64));
     const int x = qMax((view.width() - want.width()) / 2, 0);
     const int y = qMax((view.height() - want.height()) / 2, 0);
+    // X11 以设备像素下命令：逻辑坐标乘 dpr 后再比较/下发
+    const qreal s = dpr();
+    const int dx = qRound(x * s), dy = qRound(y * s);
+    const int dw = qRound(want.width() * s), dh = qRound(want.height() * s);
     int cx = 0, cy = 0, cw = 0, ch = 0;
     if (m_x11->windowGeometry(m_childWid, &cx, &cy, &cw, &ch)
-        && QSize(cw, ch) == want && cx == x && cy == y)
+        && cw == dw && ch == dh && cx == dx && cy == dy)
         return;  // 已就位，避免无意义的 ConfigureNotify 风暴
     m_appliedSize = want;
     m_lastChildSize = want;
-    m_x11->moveResize(m_childWid, x, y, want.width(), want.height());
+    m_x11->moveResize(m_childWid, dx, dy, dw, dh);
 }
 
 void RdpView::focusChild() {
