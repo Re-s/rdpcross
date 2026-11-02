@@ -289,7 +289,8 @@ jobs:
           mv artifacts/rdpcross-arm64/rdpcross "artifacts/rdpcross-arm64/rdpcross-${version}-arm64"
           # release 资产名只允许 ASCII：原名含中文会被 GitHub 清理成乱码
           mv artifacts/rdpcross-appimage/*.AppImage \
-            "artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage"
+            "artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage" \
+            || true  # 产物已经同名，无需再重命名
           tag="v$version"
           # 自动更新：这个 tag 的 release 存在 → 保留标题/描述，只重传新资产
           # 不存在 → 创建 release（git tag 也由 gh 自动建，不需要提前打 tag）
