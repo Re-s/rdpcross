@@ -187,6 +187,17 @@ void RdpView::checkChildSize() {
     if (!m_x11->windowSize(m_childWid, &w, &h)) return;
     if (w <= 0 || h <= 0) return;
     const QSize sz(w, h);
+    const QSize view(qMax(width(), 64), qMax(height(), 64));
+
+    // 修复：smart 模式下，子窗口必须始终铺满视图。
+    // 远端（服务器屏幕切换/显示器决议）会不断把子窗口拉回它自己的桌面分辨率，
+    // 比如从视图拉的 1080 回到主机的 900，于是右/下侧留下永久的视图背景黑边。
+    // 因此每 300ms 检查一次：只要子窗口比视图小，就重新铺满，
+    // 不被 m_lastChildSize/m_appliedSize 状态机的高水位挡住。
+    if (m_profile.resizeMode == constants::kResizeSmart) {
+        if (sz.width() < view.width() - 8 || sz.height() < view.height() - 8)
+            QTimer::singleShot(0, this, &RdpView::fitChild);
+    }
     if (sz != m_lastChildSize) {
         m_lastChildSize = sz;
         if (sz != m_appliedSize) {
@@ -202,7 +213,6 @@ void RdpView::checkChildSize() {
             }
             emit sessionSizeChanged(sz);
             // 服务器给的比当前视图小（窗口最大化等无法收缩的场景）：居中落位
-            const QSize view(qMax(width(), 64), qMax(height(), 64));
             if (isResponse
                 && (sz.width() < view.width() - 8 || sz.height() < view.height() - 8))
                 QTimer::singleShot(0, this, &RdpView::fitChild);

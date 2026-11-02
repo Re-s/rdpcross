@@ -148,6 +148,75 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------
+  # 2. deb（amd64）
+  # ---------------------------------------------------------------
+  build-deb:
+    name: Build deb (x86_64)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 宽松：deb 不需要显示，只要 freerdp + qt6 开发库和 dpkg 工具链
+      - name: Setup Ubuntu
+        run: |
+          sudo apt-get update
+          FQP=""
+          for p in libfreerdp3-dev freerdp3-dev freerdp2-dev; do
+            if sudo apt-get install -y --no-install-recommends "$p" >/dev/null 2>&1; then FQP="$p"; break; fi
+          done
+          echo "freerdp: '${FQP:-none}'"
+          sudo apt-get install -y --no-install-recommends build-essential cmake ninja-build \
+            pkg-config patchelf python3 wget curl qt6-base-dev "$FQP" \
+            libasound2-dev libpulse-dev libx11-dev
+          echo "DEP OK"
+
+      # 构建 native 二进制
+      - name: Build binary
+        run: |
+          echo "CPU: $(nproc)"
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          ninja -C build -j1
+          echo "QCMDSIZE: $(wc -c < build/rdpcross) bytes"
+
+      # dpkg-deb 手动打包：可控最小体积，不含 AppImage 专用的 sharun/uruntime
+      - name: Package deb
+        run: |
+          PKGVER=$(cat build/VERSION_FULL.txt)
+          echo "version=$PKGVER"
+          PKG=dpkgbuild
+          rm -rf "$PKG" && mkdir -p "$PKG/DEBIAN" "$PKG/usr/bin" \
+            "$PKG/usr/share/applications" "$PKG/usr/share/icons/hicolor/scalable/apps"
+          # control 信息必须完整合规，dpkg-deb --build 不接受空控制
+          cat > "$PKG/DEBIAN/control" <<EOF
+          Package: rdpcross
+          Version: ${PKGVER}
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Re-s <re-s@users.noreply.github.com>
+          Description: RDPCross 跨平台 RDP 远程桌面客户端
+           基于 Qt6 + FreeRDP3，支持 .rdp 导入导出、嵌入多会话、智能缩放与
+           动态分辨率。
+          Depends: libc6, libgl1, libx11-6
+          EOF
+          cp build/rdpcross "$PKG/usr/bin/rdpcross"
+          cp resources/rdpcross.desktop "$PKG/usr/share/applications/"
+          cp resources/rdpcross.svg "$PKG/usr/share/icons/hicolor/scalable/apps/"
+          chmod 755 "$PKG/usr/bin/rdpcross"
+          dpkg-deb --build --root-owner-group "$PKG" \
+            "rdpcross-${PKGVER}-amd64.deb"
+          ls -la *.deb || true
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: rdpcross-deb
+          path: rdpcross-*.deb
+          retention-days: 7
+
+  # ---------------------------------------------------------------
   # 2. arm64（Docker QEMU，容器内原生 gcc + arm64 开发库，一次性构建）
   # ---------------------------------------------------------------
   build-arm64:
@@ -195,11 +264,13 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build-appimage, build-arm64]
-    # 触发方式：手动（workflow_dispatch）/ push v* tag / release published。
-    # 不能只依赖 release 事件 —— 那样本 job 永远不会运行
+    needs: [build-appimage, build-arm64, build-deb]
+    # 触发方式：push main 自动 / 手动（workflow_dispatch）/ push v* tag / release published。
+    # push main 自动跑之后 release 会自动创建（tag 不存在时新建、已存在时更新），不再需要手动打 tag。
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'release' && github.event.action == 'published') }}
+      ${{ github.event_name == 'push' ||
+          github.event_name == 'workflow_dispatch' ||
+          github.event_name == 'release' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -219,9 +290,19 @@ jobs:
           # release 资产名只允许 ASCII：原名含中文会被 GitHub 清理成乱码
           mv artifacts/rdpcross-appimage/*.AppImage \
             "artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage"
-          gh release create "v$version" --target main --title "RDPCross v$version" \
-            --generate-notes \
+          tag="v$version"
+          # 自动更新：这个 tag 的 release 存在 → 保留标题/描述，只重传新资产
+          # 不存在 → 创建 release（git tag 也由 gh 自动建，不需要提前打 tag）
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "RELEASE EXISTS: updating $tag"
+            gh release edit "$tag" --title "RDPCross $tag" --generate-notes
+          else
+            echo "RELEASE NEW: creating $tag"
+            gh release create "$tag" --target main --title "RDPCross $tag" --generate-notes
+          fi
+          gh release upload "$tag" \
             artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage \
-            artifacts/rdpcross-arm64/rdpcross-${version}-arm64
+            artifacts/rdpcross-arm64/rdpcross-${version}-arm64 \
+            artifacts/rdpcross-deb/rdpcross-${version}-amd64.deb
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
