@@ -249,10 +249,14 @@ jobs:
             cd /app &&
             apt-get update -q > /dev/null 2>&1 && echo "APT UPDATE OK" &&
             apt-get install -y --no-install-recommends \
-              build-essential cmake ninja-build pkg-config \
+              build-essential cmake ninja-build pkg-config git \
               qt6-base-dev freerdp3-dev \
               libasound2-dev libpulse-dev libx11-dev libgl-dev > /dev/null 2>&1 &&
             echo "DEPS READY" &&
+            # /app 挂载自宿主机，属主不是容器 root，git 会拒绝操作（dubious
+            # ownership）→ CMake 的 git describe 全部失败，版本号兜底成
+            # gunknown。必须把 /app 加进 safe.directory。
+            git config --global --add safe.directory /app &&
             rm -rf build && mkdir -p build &&
             cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release > /tmp/cmake.log 2>&1 &&
             echo "CMAKE OK" &&
