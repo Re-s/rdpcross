@@ -332,8 +332,11 @@ jobs:
           # 从构建产物取完整构建版号（vrndis 风格：2.0.0-N-g<hash>）
           version=$(cat artifacts/rdpcross-appimage/VERSION_FULL.txt)
           echo "version=$version"
-          # arm64 裸二进制重命名，避免与 AppImage 混淆
-          mv artifacts/rdpcross-arm64/rdpcross "artifacts/rdpcross-arm64/rdpcross-${version}-arm64"
+          # arm64 裸二进制重命名，避免与 AppImage 混淆。
+          # 注意 upload-artifact v4 以多 path 的公共祖先为根：build/rdpcross 与
+          # rdpcross-*.deb 的公共祖先是工作区根，所以二进制下载后仍带 build/ 前缀。
+          mv artifacts/rdpcross-arm64/build/rdpcross \
+            "artifacts/rdpcross-arm64/rdpcross-${version}-arm64"
           # release 资产名只允许 ASCII：原名含中文会被 GitHub 清理成乱码
           mv artifacts/rdpcross-appimage/*.AppImage \
             "artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage" \
