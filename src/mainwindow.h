@@ -47,6 +47,7 @@ private slots:
 
 private:
     void refreshTree();
+    static QString formatLastUsed(qint64 secs);
     void launch(ConnectionProfile profile, const QString &password = QString());
     void exportRdpFor(const ConnectionProfile &p);
     void pushQuickHistory(const QString &host);

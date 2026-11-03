@@ -93,11 +93,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(actAbout, &QAction::triggered, this, &MainWindow::onAbout);
 
     // --- 状态栏 ---
+    // 正常情况下二进制路径对用户毫无意义（技术噪音）；只有找不到它才是
+    // 用户需要知道的阻塞问题，此时才在状态栏常驻一条醒目提示。
     auto *sb = statusBar();
-    sb->addPermanentWidget(new QLabel(freerdpargs::findBinary().isEmpty()
-                                          ? "未找到 xfreerdp（请安装 freerdp3-x11）"
-                                          : freerdpargs::findBinary(),
-                                      this));
+    if (freerdpargs::findBinary().isEmpty()) {
+        auto *warn = new QLabel("⚠ 未找到 xfreerdp，无法连接——请安装 freerdp3-x11", this);
+        warn->setStyleSheet("color: #b00020; padding: 2px 8px;");
+        sb->addPermanentWidget(warn);
+    }
 
     // 主窗口几何记忆
     auto geo = m_settings.value("window_geometry").toArray();
@@ -115,11 +118,34 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         m_hostEdit->setText(hist.first().toString());
         m_hostEdit->selectAll();
     }
+    // 历史可见化：历史只填第一条而看不到其余等于没有历史。
+    // 输入时下拉补全，↓ 键也能翻阅最近 8 条。
+    if (!hist.isEmpty()) {
+        QStringList hosts;
+        for (const auto &v : hist) hosts << v.toString();
+        auto *comp = new QCompleter(hosts, m_hostEdit);
+        comp->setFilterMode(Qt::MatchContains);
+        comp->setCaseSensitivity(Qt::CaseInsensitive);
+        comp->setMaxVisibleItems(8);
+        m_hostEdit->setCompleter(comp);
+    }
 }
 
 MainWindow::~MainWindow() = default;
 
 // ============================================================== 列表维护
+// "最后使用"列：今天显示 hh:mm，更早显示 MM-dd，工具提示含完整时间。
+// 一列塞 yyyy-MM-dd hh:mm 太宽且信息重心错——用户要的是"多久前用过"，不是绝对时刻。
+QString MainWindow::formatLastUsed(qint64 secs) {
+    if (secs <= 0) return "—";
+    QDateTime dt = QDateTime::fromSecsSinceEpoch(secs);
+    QDateTime now = QDateTime::currentDateTime();
+    if (dt.date() == now.date()) return dt.toString("hh:mm");
+    if (dt.daysTo(now) == 1) return "昨天";
+    if (dt.daysTo(now) < 7) return dt.toString("周") + QString::number(dt.date().dayOfWeek());
+    return dt.toString("MM-dd");
+}
+
 void MainWindow::refreshTree() {
     m_tree->clear();
     m_profiles = config::loadProfiles();
@@ -151,16 +177,34 @@ void MainWindow::refreshTree() {
         });
         for (int idx : items) {
             const auto &p = m_profiles[idx];
-            QString last = p.lastUsed > 0
-                               ? QDateTime::fromSecsSinceEpoch(p.lastUsed).toString("yyyy-MM-dd hh:mm")
-                               : "—";
-            auto *item = new QTreeWidgetItem(parent, {p.name, p.host, last});
-            item->setData(0, Qt::UserRole, p.id);
-            item->setIcon(0, iconFor(p));
+        QString last = formatLastUsed(p.lastUsed);
+        auto *item = new QTreeWidgetItem(parent, {p.name, p.host, last});
+        item->setData(0, Qt::UserRole, p.id);
+        item->setIcon(0, iconFor(p));
+        // 相对时间便于扫读；悬停可看绝对时刻（完成注释承诺）。
+        if (p.lastUsed > 0)
+            item->setToolTip(2, QDateTime::fromSecsSinceEpoch(p.lastUsed)
+                                    .toString("yyyy-MM-dd hh:mm"));
         }
         if (parent != m_tree->invisibleRootItem()) parent->setExpanded(true);
     }
-    m_tree->sortByColumn(0, Qt::AscendingOrder);
+    // 注意：不再调用 sortByColumn()——它按"连接"名升序会覆盖上面组内按
+    // 最后使用时间的倒序（"最近用过的在最上"是 mstsc 式的核心预期）。
+    // 组顺序已由 sortedGroups 的字典序（空组置尾）保证。
+
+    // 空状态引导：首次使用时树是空的，用户不知道从哪开始。
+    // 放一条不可选的提示行，指明最短路径（快速连接条就在正上方）。
+    if (m_profiles.isEmpty()) {
+        auto *hint = new QTreeWidgetItem(m_tree,
+            {"暂无保存的连接——在上方「计算机」输入地址直接连接，或 Ctrl+N 新建", "", ""});
+        hint->setFlags(Qt::NoItemFlags);
+        QFont f = hint->font(0);
+        f.setPointSize(f.pointSize() - 1);
+        hint->setFont(0, f);
+        QBrush b = hint->foreground(0);
+        b.setColor(QColor(120, 120, 125));
+        hint->setForeground(0, b);
+    }
 }
 
 QIcon MainWindow::iconFor(const ConnectionProfile &p) {

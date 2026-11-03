@@ -141,9 +141,12 @@ SessionWindow::SessionWindow(const ConnectionProfile &profile, const QString &pa
     connect(scF8, &QShortcut::activated, this, [this] {
         if (m_floating->isVisible()) m_floating->hide(); else showFloatbar();
     });
+    // Esc 只在全屏时退出全屏；非全屏按 Esc 直接断开连接是误操作重灾区
+    // （用户在远程桌面里按 Esc 期望的是远程响应，而不是整个会话被关掉）。
+    // mstsc 行为同样是非全屏窗口对 Esc 无反应。要断开请用 F8 浮动条或标题栏关闭。
     auto *scEsc = new QShortcut(QKeySequence("Esc"), this);
     connect(scEsc, &QShortcut::activated, this, [this] {
-        if (m_full) leaveFullscreen(); else maybeClose();
+        if (m_full) leaveFullscreen();
     });
     // Ctrl+Alt+End 提示（FreeRDP 子窗口聚焦时由 FreeRDP 自身映射为 Ctrl+Alt+Delete）
     auto *sc_hint = new QShortcut(QKeySequence("Ctrl+Alt+End"), this);
