@@ -36,8 +36,13 @@ function(rdpcross_git_version)
     endif()
 
     # 3) 最近 tag 描述: v2.0.0-12-g1234567
+    # --exclude "v*-g*"：CI 的 release 步骤会把"版本全量"（v2.1.0-3-gXXXXXX）
+    # 回写成 git tag，这种自建 tag 指向最新 commit，会被 describe 当成"最近
+    # 版本 tag"（输出带 -0- 尾缀 → 正则不匹配 → 版本号退回兜底、距离数字
+    # 变成无语义的总提交数）。真版本 tag（v2.1.0）从不以 -g 开头片段结尾，
+    # 用 -g 作排除特征即可精确剔除自建 tag。
     execute_process(
-        COMMAND git describe --tags --long --always --dirty=-dirty
+        COMMAND git describe --tags --long --always --dirty=-dirty --exclude "v*-g*"
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         OUTPUT_VARIABLE GIT_DESCRIBE
         OUTPUT_STRIP_TRAILING_WHITESPACE
