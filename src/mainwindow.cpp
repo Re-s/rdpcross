@@ -91,10 +91,16 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(actExport, &QAction::triggered, this, &MainWindow::onExportRdp);
     tb->addAction(actExport);
 
-    // --- 菜单栏（帮助）---
-    auto *mHelp = menuBar()->addMenu("帮助(&H)");
-    auto *actAbout = mHelp->addAction("关于 RDPCross(&A)…", QKeySequence::HelpContents);
+    // --- 帮助 ---
+    // 不设菜单栏：它只有"关于"一个条目，为它独养一行菜单是纯空间浪费，
+    // 也违反菜单栏惯例（应有 文件/编辑/…/帮助 多项）。所有操作都在工具栏，
+    // "关于"放工具栏末尾即可，F1 快捷键照旧。
+    tb->addSeparator();
+    auto *actAbout = new QAction("关于", this);
+    actAbout->setToolTip("关于 RDPCross (F1)");
+    actAbout->setShortcut(QKeySequence::HelpContents);
     connect(actAbout, &QAction::triggered, this, &MainWindow::onAbout);
+    tb->addAction(actAbout);
 
     // --- 状态栏 ---
     // 正常情况下二进制路径对用户毫无意义（技术噪音）；只有找不到它才是
