@@ -15,6 +15,10 @@
 #include <QVBoxLayout>
 #include <QCloseEvent>
 #include <QDateTime>
+#include <QCompleter>
+#include <QFont>
+#include <QBrush>
+#include <QColor>
 #include <QScreen>
 #include <QGuiApplication>
 
