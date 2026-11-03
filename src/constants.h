@@ -9,7 +9,7 @@
 namespace constants {
 
 inline const QString kAppName = "RDPCross";
-inline const QString kAppVersion = "2.0.0";
+inline const QString kAppVersion = "2.1.0";  // 与最新 git tag 同步；describe 兜底分支用它作 base
 
 // 分辨率预设：(名称, 宽, 高)；宽高 0 表示全屏
 struct ResPreset { QString name; int w; int h; };

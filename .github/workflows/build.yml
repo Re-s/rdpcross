@@ -24,6 +24,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        # 必须全历史：CMake 用 git describe 取最近版本 tag 推导版本号，
+        # shallow(depth=1) 拿不到 v* tag → 版本号错误回退到 constants.h 硬编码。
+        with:
+          fetch-depth: 0
 
       # 缓存层 1：apt 包列表 + 已下载 deb
       - name: Cache apt lists & archives
@@ -157,6 +161,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        # 必须全历史：CMake 用 git describe 取最近版本 tag 推导版本号，
+        # shallow(depth=1) 拿不到 v* tag → 版本号错误回退到 constants.h 硬编码。
+        with:
+          fetch-depth: 0
 
       # 宽松：deb 不需要显示，只要 freerdp + qt6 开发库和 dpkg 工具链
       - name: Setup Ubuntu
@@ -226,6 +234,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        # 必须全历史：CMake 用 git describe 取最近版本 tag 推导版本号，
+        # shallow(depth=1) 拿不到 v* tag → 版本号错误回退到 constants.h 硬编码。
+        with:
+          fetch-depth: 0
 
       - name: Setup QEMU (arm64)
         uses: docker/setup-qemu-action@v3
@@ -274,6 +286,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        # 必须全历史：CMake 用 git describe 取最近版本 tag 推导版本号，
+        # shallow(depth=1) 拿不到 v* tag → 版本号错误回退到 constants.h 硬编码。
+        with:
+          fetch-depth: 0
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -291,7 +307,15 @@ jobs:
           mv artifacts/rdpcross-appimage/*.AppImage \
             "artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage" \
             || true  # 产物已经同名，无需再重命名
-          tag="v$version"
+          # tag 事件：release 直接挂到触发它的真实版本 tag（如 v2.1.0）。
+          # 不能用 describe 输出 vX.Y.Z-N-gHASH 当 tag 名——这种"长得像版本号"
+          # 的假 tag 会被下一次构建的 git describe 当成最近版本 tag，把版本号
+          # 污染/锁死在错误前缀上（v2.0.0-1 系列就是这么来的）。
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="v$version"
+          fi
           # 自动更新：这个 tag 的 release 存在 → 保留标题/描述，只重传新资产
           # 不存在 → 创建 release（git tag 也由 gh 自动建，不需要提前打 tag）
           if gh release view "$tag" >/dev/null 2>&1; then
