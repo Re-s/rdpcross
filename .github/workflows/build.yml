@@ -263,11 +263,42 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
 
+      # 与 x86_64 deb 相同的手动打包流程，仅 Architecture/产物名不同。
+      # dpkg-deb 只负责打包，不涉及交叉工具链，宿主机直接执行即可。
+      - name: Package deb (arm64)
+        run: |
+          PKGVER=$(cat build/VERSION_FULL.txt)
+          echo "version=$PKGVER"
+          PKG=dpkgbuild-arm64
+          rm -rf "$PKG" && mkdir -p "$PKG/DEBIAN" "$PKG/usr/bin" \
+            "$PKG/usr/share/applications" "$PKG/usr/share/icons/hicolor/scalable/apps"
+          cat > "$PKG/DEBIAN/control" <<EOF
+          Package: rdpcross
+          Version: ${PKGVER}
+          Section: net
+          Priority: optional
+          Architecture: arm64
+          Maintainer: Re-s <re-s@users.noreply.github.com>
+          Description: RDPCross 跨平台 RDP 远程桌面客户端
+           基于 Qt6 + FreeRDP3，支持 .rdp 导入导出、嵌入多会话、智能缩放与
+           动态分辨率。
+          Depends: libc6, libgl1, libx11-6
+          EOF
+          cp build/rdpcross "$PKG/usr/bin/rdpcross"
+          cp resources/rdpcross.desktop "$PKG/usr/share/applications/"
+          cp resources/rdpcross.svg "$PKG/usr/share/icons/hicolor/scalable/apps/"
+          chmod 755 "$PKG/usr/bin/rdpcross"
+          dpkg-deb --build --root-owner-group "$PKG" \
+            "rdpcross-${PKGVER}-arm64.deb"
+          ls -la *.deb || true
+
       - name: Upload arm64 binary
         uses: actions/upload-artifact@v4
         with:
           name: rdpcross-arm64
-          path: build/rdpcross
+          path: |
+            build/rdpcross
+            rdpcross-*.deb
           retention-days: 7
 
   # ---------------------------------------------------------------
@@ -327,7 +358,8 @@ jobs:
           fi
           gh release upload "$tag" \
             artifacts/rdpcross-appimage/rdpcross-${version}-anylinux-x86_64.AppImage \
-            artifacts/rdpcross-arm64/rdpcross-${version}-arm64 \
-            artifacts/rdpcross-deb/rdpcross-${version}-amd64.deb
+            artifacts/rdpcross-deb/rdpcross-${version}-amd64.deb \
+            artifacts/rdpcross-arm64/rdpcross-${version}-arm64.deb \
+            artifacts/rdpcross-arm64/rdpcross-${version}-arm64
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
