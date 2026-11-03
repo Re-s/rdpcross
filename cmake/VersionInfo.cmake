@@ -9,12 +9,14 @@
 #  tag 不存在时用本地全部提交数，hash 取 7 位短 hash。                          ║
 # ╚═══════════════════════════════════════════════════════════════════════════╝
 function(rdpcross_git_version)
-    set(BASE_VERSION "2.0.0")
+    set(BASE_VERSION "2.1.0")  # constants.h 缺失时的兜底，与 kAppVersion 保持同步
 
     # 1) 从 constants.h 取 base version（例如 2.0.0，不存在的兜底）
+    # 注意：CMake 正则不支持 [[:space:]] POSIX 字符类，只能用显式字符集，
+    # 以前的 [[:space:]] 写法静默失效，base 永远是下面硬编码的值。
     if(EXISTS ${CMAKE_SOURCE_DIR}/src/constants.h)
         file(READ ${CMAKE_SOURCE_DIR}/src/constants.h CONSTANTS_SRC)
-        string(REGEX MATCH "kAppVersion[[:space:]]*=[[:space:]]*\"([0-9.]+)\"" _m "${CONSTANTS_SRC}")
+        string(REGEX MATCH "kAppVersion[ \t\r\n]*=[ \t\r\n]*\"([0-9.]+)\"" _m "${CONSTANTS_SRC}")
         if(_m)
             set(BASE_VERSION "${CMAKE_MATCH_1}")
         endif()
